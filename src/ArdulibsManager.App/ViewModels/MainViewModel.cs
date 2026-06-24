@@ -243,31 +243,21 @@ public sealed class MainViewModel : ObservableObject
 
         foreach (var lib in InstalledLibraries.ToList())
         {
-            var repo = ResolveRepositoryForInstalledLibrary(lib);
-            if (repo is null)
-            {
-                lib.LatestVersion = null;
-                lib.HasUpdate = false;
-                lib.Status = "Не найдено точное совпадение name/repo";
-                continue;
-            }
-
             lib.IsChecking = true;
             try
             {
-                var latest = await _github.GetLatestTagNameAsync(repo);
-                lib.LatestVersion = latest;
-                lib.HasUpdate = VersionService.IsNewer(latest, lib.Version);
-                if (string.IsNullOrWhiteSpace(latest))
-                    lib.Status = "Теги не найдены";
-                else if (!VersionService.LooksLikeVersion(latest))
-                    lib.Status = "Теги не похожи на версии";
-                else
-                    lib.Status = lib.HasUpdate ? "Есть обновление" : "Актуально";
+                var result = await ResolveUpdateCandidateAsync(lib);
+                lib.UpdateRepositoryFullName = result.Repository?.FullName;
+                lib.LatestVersion = result.LatestTag;
+                lib.HasUpdate = result.HasUpdate;
+                lib.Status = result.Status;
                 if (lib.HasUpdate) updated.Add(lib);
             }
             catch (Exception ex)
             {
+                lib.UpdateRepositoryFullName = null;
+                lib.LatestVersion = null;
+                lib.HasUpdate = false;
                 lib.Status = "Не удалось проверить: " + ex.Message;
             }
             finally { lib.IsChecking = false; }
@@ -279,24 +269,149 @@ public sealed class MainViewModel : ObservableObject
             sb.AppendLine("Есть обновления для библиотек:");
             sb.AppendLine();
             foreach (var lib in updated.OrderBy(x => x.Name))
-                sb.AppendLine($"• {lib.Name} {lib.Version} → {lib.LatestVersion}");
+            {
+                var source = string.IsNullOrWhiteSpace(lib.UpdateRepositoryFullName) ? string.Empty : $" ({lib.UpdateRepositoryFullName})";
+                sb.AppendLine($"• {lib.Name} {lib.Version} → {lib.LatestVersion}{source}");
+            }
             MessageBox.Show(sb.ToString(), "Доступны обновления", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 
     private InstalledLibrary? FindInstalled(GithubRepository repo)
     {
-        return InstalledLibraries.FirstOrDefault(x => NamesMatch(x.Name, repo.Name));
+        return InstalledLibraries.FirstOrDefault(x =>
+            x.RepositoryFullName?.Equals(repo.FullName, StringComparison.OrdinalIgnoreCase) == true)
+            ?? InstalledLibraries.FirstOrDefault(x => string.IsNullOrWhiteSpace(x.RepositoryFullName) && NamesMatch(x.Name, repo.Name));
+    }
+
+    private sealed record UpdateCandidateResult(GithubRepository? Repository, string? LatestTag, bool HasUpdate, string Status);
+
+    private static string? GetInstalledComparableVersion(InstalledLibrary lib)
+    {
+        // Если библиотека установлена/обновлена через ArdulibsManager, сравниваем обновления
+        // с выбранным GitHub ref из .ardulibs.json, а не только с version из library.properties.
+        // Некоторые библиотеки публикуют tag 1.1.2, но забывают обновить library.properties version.
+        return string.IsNullOrWhiteSpace(lib.InstalledRef) ? lib.Version : lib.InstalledRef;
+    }
+
+    private async Task<UpdateCandidateResult> ResolveUpdateCandidateAsync(InstalledLibrary lib)
+    {
+        if (string.IsNullOrWhiteSpace(lib.Name))
+            return new UpdateCandidateResult(null, null, false, "Нет имени библиотеки");
+
+        // Если библиотека установлена ArdulibsManager, обновляем строго по сохранённому repo
+        // из .ardulibs.json и не ищем совпадения в registry.
+        if (!string.IsNullOrWhiteSpace(lib.RepositoryFullName))
+        {
+            var managedRepo = ResolveRepositoryByFullName(lib.RepositoryFullName);
+            if (managedRepo is null)
+                return new UpdateCandidateResult(null, null, false, "Некорректный repo в .ardulibs.json");
+
+            var installedRef = lib.InstalledRef;
+            var propertiesVersion = lib.PropertiesVersion;
+            var hasMetadataMismatch = !string.IsNullOrWhiteSpace(installedRef)
+                && !string.IsNullOrWhiteSpace(propertiesVersion)
+                && !VersionService.IsSameVersion(installedRef, propertiesVersion);
+
+            var latest = await _github.GetLatestTagNameAsync(managedRepo);
+            var currentVersion = string.IsNullOrWhiteSpace(installedRef) ? lib.Version : installedRef;
+            var hasUpdate = VersionService.IsNewer(latest, currentVersion);
+
+            if (hasUpdate)
+                return CandidateToResult(managedRepo, latest, true, $"Есть обновление из {managedRepo.FullName}");
+
+            if (hasMetadataMismatch && !string.IsNullOrWhiteSpace(installedRef))
+            {
+                // .ardulibs.json говорит, что должен быть установлен ref X, но
+                // library.properties показывает другую версию. Это считаем
+                // неконсистентной установкой: кнопка «Обновить» должна не
+                // просто править файл, а заново скачать repo/ref из GitHub и
+                // заменить папку библиотеки.
+                return new UpdateCandidateResult(
+                    managedRepo,
+                    installedRef,
+                    true,
+                    $"Требуется переустановка {installedRef} из {managedRepo.FullName}");
+            }
+
+            return CandidateToResult(managedRepo, latest, false, $"Актуально ({managedRepo.FullName})");
+        }
+
+        // Для ручных библиотек без .ardulibs.json используем fallback:
+        // ищем только репозитории из registry, у которых repo name строго совпадает
+        // с library.properties name после нормализации.
+        var candidates = _repositories.Where(r => NamesMatch(lib.Name, r.Name)).ToList();
+        if (candidates.Count == 0)
+            return new UpdateCandidateResult(null, null, false, "Не найдено точное совпадение name/repo");
+
+        var checkedCandidates = new List<(GithubRepository Repo, string? Latest, bool HasUpdate)>();
+        foreach (var repo in candidates)
+        {
+            var currentVersion = GetInstalledComparableVersion(lib);
+            var latest = await _github.GetLatestTagNameAsync(repo);
+            var hasUpdate = VersionService.IsNewer(latest, currentVersion);
+            checkedCandidates.Add((repo, latest, hasUpdate));
+        }
+
+        if (candidates.Count == 1)
+        {
+            var only = checkedCandidates[0];
+            return CandidateToResult(only.Repo, only.Latest, only.HasUpdate);
+        }
+
+        // Если repo name не уникален, не берём первый попавшийся репозиторий.
+        // Автоматически выбираем только ситуацию, когда ровно один кандидат реально новее локальной версии.
+        var newer = checkedCandidates.Where(x => x.HasUpdate).ToList();
+        if (newer.Count == 1)
+            return CandidateToResult(newer[0].Repo, newer[0].Latest, true, $"Есть обновление из {newer[0].Repo.FullName}");
+
+        if (newer.Count > 1)
+            return new UpdateCandidateResult(null, null, false, "Несколько repo с таким именем имеют обновления");
+
+        var currentLike = checkedCandidates.FirstOrDefault(x => VersionService.IsSameVersion(x.Latest, GetInstalledComparableVersion(lib)));
+        if (currentLike.Repo is not null)
+            return new UpdateCandidateResult(currentLike.Repo, currentLike.Latest, false, $"Актуально ({currentLike.Repo.FullName})");
+
+        return new UpdateCandidateResult(null, null, false, "Несколько repo с таким именем, обновление не выбрано");
+    }
+
+    private static UpdateCandidateResult CandidateToResult(GithubRepository repo, string? latest, bool hasUpdate, string? overrideStatus = null)
+    {
+        if (!string.IsNullOrWhiteSpace(overrideStatus))
+            return new UpdateCandidateResult(repo, latest, hasUpdate, overrideStatus);
+        if (string.IsNullOrWhiteSpace(latest))
+            return new UpdateCandidateResult(repo, latest, false, "Теги не найдены");
+        if (!VersionService.LooksLikeVersion(latest))
+            return new UpdateCandidateResult(repo, latest, false, "Теги не похожи на версии");
+        return new UpdateCandidateResult(repo, latest, hasUpdate, hasUpdate ? "Есть обновление" : "Актуально");
     }
 
     private GithubRepository? ResolveRepositoryForInstalledLibrary(InstalledLibrary lib)
     {
-        if (string.IsNullOrWhiteSpace(lib.Name)) return null;
+        if (!string.IsNullOrWhiteSpace(lib.UpdateRepositoryFullName))
+            return ResolveRepositoryByFullName(lib.UpdateRepositoryFullName);
 
-        // Для обновлений НЕ используем library.properties url как источник истины.
-        // Репозиторий должен быть найден в registry по строгому совпадению имени библиотеки
-        // из library.properties с именем GitHub-репозитория.
-        return _repositories.FirstOrDefault(r => NamesMatch(lib.Name, r.Name));
+        if (!string.IsNullOrWhiteSpace(lib.RepositoryFullName))
+            return ResolveRepositoryByFullName(lib.RepositoryFullName);
+
+        var candidates = _repositories.Where(r => NamesMatch(lib.Name, r.Name)).ToList();
+        return candidates.Count == 1 ? candidates[0] : null;
+    }
+
+    private GithubRepository? ResolveRepositoryByFullName(string fullName)
+    {
+        var repo = _repositories.FirstOrDefault(r => r.FullName.Equals(fullName, StringComparison.OrdinalIgnoreCase));
+        if (repo is not null) return repo;
+
+        var parts = fullName.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 2) return null;
+
+        return new GithubRepository
+        {
+            Owner = parts[0],
+            Name = parts[1],
+            Url = $"https://github.com/{parts[0]}/{parts[1]}"
+        };
     }
 
     private static bool NamesMatch(string? libraryName, string? repositoryName)
@@ -391,14 +506,49 @@ public sealed class MainViewModel : ObservableObject
     private async Task UpdateAsync(InstalledLibrary? lib)
     {
         if (lib is null) return;
-        var repo = ResolveRepositoryForInstalledLibrary(lib);
-        if (repo is null)
+
+        // Не полагаемся только на значения, сохранённые во время фоновой проверки.
+        // Для ручных библиотек без .ardulibs.json кандидат может быть найден по fallback-правилу
+        // name == repo name. Перед обновлением пересчитываем его заново и берём конкретный repo + tag.
+        UpdateCandidateResult candidate;
+        try
         {
-            MessageBox.Show("Обновление недоступно: имя библиотеки из library.properties не совпадает с именем репозитория в registry.", "Обновление", MessageBoxButton.OK, MessageBoxImage.Information);
+            candidate = await ResolveUpdateCandidateAsync(lib);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("Обновление недоступно: " + ex.Message, "Обновление", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        var tag = lib.LatestVersion ?? await _github.GetLatestTagNameAsync(repo);
-        if (string.IsNullOrWhiteSpace(tag)) return;
+
+        var repo = candidate.Repository;
+        var tag = candidate.LatestTag;
+        if (repo is null || string.IsNullOrWhiteSpace(tag))
+        {
+            MessageBox.Show("Обновление недоступно: " + candidate.Status, "Обновление", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        if (!candidate.HasUpdate && VersionService.IsSameVersion(tag, lib.Version))
+        {
+            // Если раньше metadata уже была обновлена до tag, но library.properties остался
+            // со старой версией, разрешаем повторную установку того же ref как repair.
+            // Это чинит репозитории, где tag новый, а version= в library.properties забыли поменять.
+            if (string.IsNullOrWhiteSpace(lib.PropertiesVersion) || VersionService.IsSameVersion(lib.PropertiesVersion, lib.Version))
+            {
+                MessageBox.Show("Библиотека уже актуальна.", "Обновление", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            tag = lib.Version;
+        }
+
+        if (string.IsNullOrWhiteSpace(tag))
+        {
+            Log($"Не удалось определить версию для обновления {lib.Name}");
+            MessageBox.Show("Не удалось определить версию для обновления.", "Обновление", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
 
         if (!await TryEnterLibraryOperationAsync("Обновление уже выполняется. Дождитесь окончания текущей операции."))
             return;
@@ -406,6 +556,7 @@ public sealed class MainViewModel : ObservableObject
         IsBusy = true;
         try
         {
+            Log($"Обновление библиотеки: {lib.Name} {lib.Version} -> {tag} ({repo.FullName})");
             await _installer.InstallAsync(repo, tag, LibrariesPath, new Progress<string>(Log), lib.LocalPath);
             await ScanInstalledAsync();
             _ = CheckUpdatesAsync();

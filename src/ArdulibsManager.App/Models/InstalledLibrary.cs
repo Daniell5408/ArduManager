@@ -8,13 +8,22 @@ public sealed class InstalledLibrary : ObservableObject
     private bool _isChecking;
     private bool _hasUpdate;
     private string? _status;
+    private string? _updateRepositoryFullName;
 
     public required string Name { get; init; }
     public string? Version { get; init; }
+    public string? PropertiesVersion { get; init; }
+    public string? InstalledRef { get; init; }
     public string? Maintainer { get; init; }
     public string? Url { get; init; }
     public required string LocalPath { get; init; }
     public string? RepositoryFullName { get; init; }
+
+    public string? UpdateRepositoryFullName
+    {
+        get => _updateRepositoryFullName;
+        set => SetProperty(ref _updateRepositoryFullName, value);
+    }
 
     public string? LatestVersion
     {

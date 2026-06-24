@@ -1,4 +1,5 @@
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using ArdulibsManager.Models;
 
@@ -23,7 +24,7 @@ public sealed class RepositoryRegistryService
             ? AppSettings.DefaultRepositoryListUrl
             : _settings.Current.RepositoryListUrl.Trim();
 
-        var cacheFile = _cache.GetPath("repositories_" + Math.Abs(StringComparer.OrdinalIgnoreCase.GetHashCode(registryUrl)) + ".txt");
+        var cacheFile = _cache.GetPath("repositories_" + StableHash(registryUrl) + ".txt");
         string text;
         if (!forceRefresh && _cache.IsFresh(cacheFile, TimeSpan.FromHours(_settings.Current.CacheTtlHours)))
         {
@@ -45,6 +46,12 @@ public sealed class RepositoryRegistryService
             .DistinctBy(x => x.FullName, StringComparer.OrdinalIgnoreCase)
             .OrderBy(x => x.Name)
             .ToList();
+    }
+
+    private static string StableHash(string value)
+    {
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(value.Trim().ToLowerInvariant()));
+        return Convert.ToHexString(bytes)[..16].ToLowerInvariant();
     }
 
     public static GithubRepository? ParseGithubUrl(string url)

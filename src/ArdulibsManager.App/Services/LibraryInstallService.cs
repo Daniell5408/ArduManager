@@ -55,6 +55,14 @@ public sealed class LibraryInstallService
             if (!File.Exists(stagedProps))
                 throw new InvalidOperationException("Ошибка подготовки: library.properties не найден в подготовленной папке.");
 
+            // Некоторые репозитории ставят новый GitHub tag, но забывают обновить
+            // version= в library.properties. Для Arduino это важное поле, поэтому
+            // в установленной копии синхронизируем его с выбранным tag, если tag
+            // похож на нормальную числовую версию. Исходный репозиторий не меняется.
+            props = await SyncLibraryPropertiesVersionWithTagAsync(stagedProps, props, tag, ct);
+
+            await WriteMetadataAsync(stagingPath, repo, tag, ct);
+
             log?.Report("Атомарная замена библиотеки...");
             ReplaceDirectoryAtomic(stagingPath, targetPath, librariesRoot, log);
 
@@ -62,7 +70,9 @@ public sealed class LibraryInstallService
             return new InstalledLibrary
             {
                 Name = props.Name ?? repo.Name,
-                Version = props.Version ?? tag,
+                Version = tag,
+                PropertiesVersion = props.Version,
+                InstalledRef = tag,
                 Maintainer = props.Maintainer,
                 Url = props.Url ?? repo.Url,
                 LocalPath = targetPath,
@@ -88,37 +98,103 @@ public sealed class LibraryInstallService
             throw new InvalidOperationException("Удаление отменено: в папке библиотеки не найден library.properties.");
 
         if (Directory.Exists(targetPath))
-            Directory.Delete(targetPath, recursive: true);
+        {
+            NormalizeAttributes(targetPath);
+            RetryIo(() => Directory.Delete(targetPath, recursive: true));
+        }
 
         return Task.CompletedTask;
+    }
+
+
+    private static async Task<LibraryProperties> SyncLibraryPropertiesVersionWithTagAsync(string propsPath, LibraryProperties props, string tag, CancellationToken ct)
+    {
+        var tagVersion = VersionService.ExtractNormalizedVersion(tag);
+        if (string.IsNullOrWhiteSpace(tagVersion))
+            return props;
+
+        if (VersionService.IsSameVersion(props.Version, tagVersion))
+            return props;
+
+        var lines = (await File.ReadAllTextAsync(propsPath, ct))
+            .Replace("\r\n", "\n")
+            .Split('\n')
+            .ToList();
+        var replaced = false;
+
+        for (var i = 0; i < lines.Count; i++)
+        {
+            if (lines[i].TrimStart().StartsWith("version=", StringComparison.OrdinalIgnoreCase))
+            {
+                lines[i] = "version=" + tagVersion;
+                replaced = true;
+                break;
+            }
+        }
+
+        if (!replaced)
+            lines.Add("version=" + tagVersion);
+
+        await File.WriteAllTextAsync(propsPath, string.Join(Environment.NewLine, lines), ct);
+        var updatedText = await File.ReadAllTextAsync(propsPath, ct);
+        return LibraryProperties.Parse(updatedText);
+    }
+
+    private static async Task WriteMetadataAsync(string libraryPath, GithubRepository repo, string tag, CancellationToken ct)
+    {
+        var metadata = new ManagedLibraryMetadata
+        {
+            RepositoryFullName = repo.FullName,
+            RepositoryUrl = repo.Url,
+            InstalledRef = tag,
+            InstalledAtUtc = DateTime.UtcNow
+        };
+
+        var json = JsonSerializer.Serialize(metadata, new JsonSerializerOptions { WriteIndented = true });
+        await File.WriteAllTextAsync(Path.Combine(libraryPath, ManagedLibraryMetadata.FileName), json, ct);
     }
 
     private static void ReplaceDirectoryAtomic(string stagingPath, string targetPath, string librariesRoot, IProgress<string>? log)
     {
         var oldPath = Path.Combine(librariesRoot, ".ardulibs-old-" + Path.GetFileName(targetPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)) + "-" + Guid.NewGuid().ToString("N"));
 
-        if (!Directory.Exists(targetPath))
-        {
-            Directory.Move(stagingPath, targetPath);
-            return;
-        }
-
-        Directory.Move(targetPath, oldPath);
         try
         {
-            Directory.Move(stagingPath, targetPath);
+            NormalizeAttributes(stagingPath);
+
+            if (!Directory.Exists(targetPath))
+            {
+                RetryIo(() => Directory.Move(stagingPath, targetPath));
+                return;
+            }
+
+            NormalizeAttributes(targetPath);
+            RetryIo(() => Directory.Move(targetPath, oldPath));
+        }
+        catch (Exception ex) when (IsAccessOrBusy(ex))
+        {
+            throw new IOException(
+                "Не удалось заменить папку библиотеки. Обычно это значит, что библиотека открыта или используется другой программой. " +
+                "Закрой Arduino IDE, Serial Monitor, проводник/терминал в этой папке и повтори обновление. Путь: " + targetPath,
+                ex);
+        }
+
+        try
+        {
+            RetryIo(() => Directory.Move(stagingPath, targetPath));
         }
         catch
         {
             TryDeleteDirectory(targetPath);
             if (Directory.Exists(oldPath) && !Directory.Exists(targetPath))
-                Directory.Move(oldPath, targetPath);
+                RetryIo(() => Directory.Move(oldPath, targetPath));
             throw;
         }
 
         try
         {
-            Directory.Delete(oldPath, recursive: true);
+            NormalizeAttributes(oldPath);
+            RetryIo(() => Directory.Delete(oldPath, recursive: true));
         }
         catch (Exception ex)
         {
@@ -154,12 +230,49 @@ public sealed class LibraryInstallService
         }
     }
 
+    private static void NormalizeAttributes(string path)
+    {
+        if (!Directory.Exists(path))
+            return;
+
+        foreach (var dir in Directory.EnumerateDirectories(path, "*", SearchOption.AllDirectories))
+            File.SetAttributes(dir, FileAttributes.Directory);
+
+        foreach (var file in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+            File.SetAttributes(file, FileAttributes.Normal);
+
+        File.SetAttributes(path, FileAttributes.Directory);
+    }
+
+    private static void RetryIo(Action action)
+    {
+        const int attempts = 5;
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                action();
+                return;
+            }
+            catch (Exception ex) when (attempt < attempts && IsAccessOrBusy(ex))
+            {
+                Thread.Sleep(150 * attempt);
+            }
+        }
+    }
+
+    private static bool IsAccessOrBusy(Exception ex)
+        => ex is IOException or UnauthorizedAccessException;
+
     private static void TryDeleteDirectory(string path)
     {
         try
         {
             if (Directory.Exists(path))
-                Directory.Delete(path, recursive: true);
+            {
+                NormalizeAttributes(path);
+                RetryIo(() => Directory.Delete(path, recursive: true));
+            }
         }
         catch
         {

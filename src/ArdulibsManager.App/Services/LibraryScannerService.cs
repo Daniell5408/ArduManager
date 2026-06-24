@@ -12,7 +12,7 @@ public sealed class LibraryScannerService
         foreach (var dir in Directory.EnumerateDirectories(librariesPath))
         {
             ct.ThrowIfCancellationRequested();
-            var folder = Path.GetFileName(dir);
+            var folder = Path.GetFileName(dir) ?? string.Empty;
             if (folder.StartsWith(".") || folder.Contains(".backup", StringComparison.OrdinalIgnoreCase) || folder.Equals("backups", StringComparison.OrdinalIgnoreCase))
                 continue;
 
@@ -22,15 +22,30 @@ public sealed class LibraryScannerService
             {
                 var text = await File.ReadAllTextAsync(propsPath, ct);
                 var props = LibraryProperties.Parse(text);
+                var metadata = await ReadMetadataAsync(dir, ct);
+                var displayVersion = props.Version;
+                var status = metadata?.RepositoryFullName is null
+                    ? "Не проверено"
+                    : $"Управляется: {metadata.RepositoryFullName}";
+
+                if (!string.IsNullOrWhiteSpace(metadata?.InstalledRef)
+                    && !string.IsNullOrWhiteSpace(props.Version)
+                    && !VersionService.IsSameVersion(metadata.InstalledRef, props.Version))
+                {
+                    status += $"; library.properties version={props.Version}";
+                }
+
                 list.Add(new InstalledLibrary
                 {
                     Name = props.Name ?? Path.GetFileName(dir),
-                    Version = props.Version,
+                    Version = displayVersion,
+                    PropertiesVersion = props.Version,
+                    InstalledRef = metadata?.InstalledRef,
                     Maintainer = props.Maintainer,
                     Url = props.Url,
                     LocalPath = dir,
-                    RepositoryFullName = null,
-                    Status = "Не проверено"
+                    RepositoryFullName = metadata?.RepositoryFullName,
+                    Status = status
                 });
             }
             catch (Exception ex)
@@ -46,4 +61,20 @@ public sealed class LibraryScannerService
 
         return list.OrderBy(x => x.Name).ToList();
     }
+    private static async Task<ManagedLibraryMetadata?> ReadMetadataAsync(string libraryPath, CancellationToken ct)
+    {
+        var metadataPath = Path.Combine(libraryPath, ManagedLibraryMetadata.FileName);
+        if (!File.Exists(metadataPath)) return null;
+
+        try
+        {
+            var json = await File.ReadAllTextAsync(metadataPath, ct);
+            return JsonSerializer.Deserialize<ManagedLibraryMetadata>(json);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
 }

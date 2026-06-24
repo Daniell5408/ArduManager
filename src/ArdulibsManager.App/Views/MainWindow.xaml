@@ -110,9 +110,9 @@
                                             </StackPanel>
 
                                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                                                <Button Content="Обновить" Width="74" Height="30" Margin="0,0,4,0" ToolTip="Установить свежую версию" Command="{Binding DataContext.UpdateCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" />
-                                                <Button Content="Открыть" Width="70" Height="30" Margin="0,0,4,0" ToolTip="Открыть папку библиотеки" Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" />
-                                                <Button Content="Удалить" Width="70" Height="30" Margin="0,0,0,0" ToolTip="Удалить библиотеку" Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" />
+                                                <Button Content="Обновить" Width="79" Height="30" Margin="0,0,4,0" ToolTip="Установить свежую версию" Command="{Binding DataContext.UpdateCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" />
+                                                <Button Content="Открыть" Width="75" Height="30" Margin="0,0,4,0" ToolTip="Открыть папку библиотеки" Command="{Binding DataContext.OpenFolderCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" />
+                                                <Button Content="Удалить" Width="75" Height="30" Margin="0,0,0,0" ToolTip="Удалить библиотеку" Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" />
                                             </StackPanel>
                                         </Grid>
                                     </Border>

@@ -7,7 +7,6 @@
         <Style TargetType="Button">
             <Setter Property="Padding" Value="10,6"/>
             <Setter Property="Margin" Value="4"/>
-            <Setter Property="MinWidth" Value="90"/>
             <Setter Property="Height" Value="30"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
