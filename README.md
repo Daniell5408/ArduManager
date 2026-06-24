@@ -36,10 +36,8 @@
 - Rate limits for the REST API: https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
 
 ## Ограничения
-- Версии берутся из GitHub tags
-- Не все репозитории имеют аккуратные tags/releases
-- Если `library.properties` не содержит GitHub URL, обновления такой библиотеки могут не проверяться
+- Версии берутся из GitHub tags - не все репозитории имеют аккуратные tags/releases, что-то может пойти не так
 - Если dependency name сильно отличается от repo name, автоматический поиск зависимости может не сработать
 
 ## Запуск исходника
-Нужен [SDK .NET 8](https://dotnet.microsoft.com/ru-ru/download/dotnet/8.0). Далее запускаем `dotnet restore && dotnet run --project src/ArdulibsManager.App`.
+Нужен [SDK .NET 8](https://dotnet.microsoft.com/ru-ru/download/dotnet/8.0). Далее запускаем `dotnet restore && dotnet run --project src/ArdulibsManager.App` или `run.bat` из репозитория.
