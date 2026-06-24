@@ -1,0 +1,14 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.idea/
+.vscode/
+publish/
+*.nupkg
+.DS_Store
+Thumbs.db
+startup-error.log
