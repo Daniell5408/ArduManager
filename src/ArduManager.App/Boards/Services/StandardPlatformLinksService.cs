@@ -4,40 +4,64 @@ namespace ArduboardsManager.App.Services;
 
 public sealed class StandardPlatformLinksService
 {
-    private const string FileName = "standard-platforms.json";
-
-    public IReadOnlyList<StandardPlatformLink> Load()
+    private static readonly IReadOnlyList<StandardPlatformLink> BuiltInLinks = new List<StandardPlatformLink>
     {
-        var filePath = Path.Combine(AppContext.BaseDirectory, FileName);
-
-        // При dotnet run файл копируется в bin. На случай запуска из другой структуры оставляем fallback.
-        if (!File.Exists(filePath))
+        new()
         {
-            var sourceTreeFallback = Path.Combine(Environment.CurrentDirectory, "src", "ArduManager.App", FileName);
-            if (File.Exists(sourceTreeFallback))
-                filePath = sourceTreeFallback;
+            Name = "ESP8266",
+            Url = "https://arduino.esp8266.com/stable/package_esp8266com_index.json"
+        },
+        new()
+        {
+            Name = "ESP32",
+            Url = "https://espressif.github.io/arduino-esp32/package_esp32_index.json"
+        },
+        new()
+        {
+            Name = "RP2040/RP2350",
+            Url = "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json"
+        },
+        new()
+        {
+            Name = "STM32duino",
+            Url = "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json"
+        },
+        new()
+        {
+            Name = "Arduino official",
+            Url = "https://downloads.arduino.cc/packages/package_index.json"
+        },
+        new()
+        {
+            Name = "MicroCore",
+            Url = "https://mcudude.github.io/MicroCore/package_MCUdude_MicroCore_index.json"
+        },
+        new()
+        {
+            Name = "ATTinyCore",
+            Url = "http://drazzy.com/package_drazzy.com_index.json"
+        },
+        new()
+        {
+            Name = "MiniCore",
+            Url = "https://mcudude.github.io/MiniCore/package_MCUdude_MiniCore_index.json"
+        },
+        new()
+        {
+            Name = "MightyCore",
+            Url = "https://mcudude.github.io/MightyCore/package_MCUdude_MightyCore_index.json"
+        },
+        new()
+        {
+            Name = "MegaCore",
+            Url = "https://mcudude.github.io/MegaCore/package_MCUdude_MegaCore_index.json"
+        },
+        new()
+        {
+            Name = "LGT8fx",
+            Url = "https://raw.githubusercontent.com/dbuezas/lgt8fx/master/package_lgt8fx_index.json"
         }
+    };
 
-        if (!File.Exists(filePath))
-            return Array.Empty<StandardPlatformLink>();
-
-        var json = File.ReadAllText(filePath);
-        var map = JsonSerializer.Deserialize<Dictionary<string, string>>(json, new JsonSerializerOptions
-        {
-            ReadCommentHandling = JsonCommentHandling.Skip,
-            AllowTrailingCommas = true
-        });
-
-        if (map is null || map.Count == 0)
-            return Array.Empty<StandardPlatformLink>();
-
-        return map
-            .Where(x => !string.IsNullOrWhiteSpace(x.Key) && !string.IsNullOrWhiteSpace(x.Value))
-            .Select(x => new StandardPlatformLink
-            {
-                Name = x.Key.Trim(),
-                Url = x.Value.Trim()
-            })
-            .ToList();
-    }
+    public IReadOnlyList<StandardPlatformLink> Load() => BuiltInLinks;
 }

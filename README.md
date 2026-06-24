@@ -2,8 +2,8 @@
 Кастомный менеджер Arduino-библиотек и платформ для Windows. Работает напрямую с GitHub, а не с экосистемой Arduino, которая заблокировала доступ пользователям из России
 
 Скачать свежую версию:
-- [Windows 64 bit](https://github.com/AlexGyver/ArduManager/releases/latest/download/ArduManager-x64.exe)
-- [Windows 32 bit](https://github.com/AlexGyver/ArduManager/releases/latest/download/ArduManager-x86.exe)
+- Windows 64 bit: [релиз](https://github.com/AlexGyver/ArduManager/releases/latest/download/ArduManager-x64.exe), [Яндекс.Диск](https://disk.yandex.ru/d/bZ77gGHrPNZJBw)
+- Windows 32 bit: [релиз](https://github.com/AlexGyver/ArduManager/releases/latest/download/ArduManager-x86.exe), [Яндекс.Диск](https://disk.yandex.ru/d/9WKubhTYC0kM2g)
 
 Возможности:
 - Работа напрямую с GitHub-списком библиотек в обход Arduino
