@@ -1,0 +1,7 @@
+{
+  "profiles": {
+    "ArduManager.App": {
+      "commandName": "Project"
+    }
+  }
+}

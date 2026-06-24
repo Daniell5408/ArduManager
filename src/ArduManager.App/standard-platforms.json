@@ -1,0 +1,13 @@
+{
+    "ESP8266": "https://arduino.esp8266.com/stable/package_esp8266com_index.json",
+    "ESP32": "https://espressif.github.io/arduino-esp32/package_esp32_index.json",
+    "RP2040/RP2350": "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json",
+    "STM32duino": "https://github.com/stm32duino/BoardManagerFiles/raw/main/package_stmicroelectronics_index.json",
+    "Arduino official": "https://downloads.arduino.cc/packages/package_index.json",
+    "MicroCore": "https://mcudude.github.io/MicroCore/package_MCUdude_MicroCore_index.json",
+    "ATTinyCore": "http://drazzy.com/package_drazzy.com_index.json",
+    "MiniCore": "https://mcudude.github.io/MiniCore/package_MCUdude_MiniCore_index.json",
+    "MightyCore": "https://mcudude.github.io/MightyCore/package_MCUdude_MightyCore_index.json",
+    "MegaCore": "https://mcudude.github.io/MegaCore/package_MCUdude_MegaCore_index.json",
+    "LGT8fx": "https://raw.githubusercontent.com/dbuezas/lgt8fx/master/package_lgt8fx_index.json"
+}

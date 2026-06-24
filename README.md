@@ -1,15 +1,16 @@
-# ArdulibsManager
-Кастомный менеджер Arduino-библиотек для Windows. Работает напрямую с GitHub, а не с экосистемой Arduino, которая заблокировала доступ пользователям из России
+# ArduManager
+Кастомный менеджер Arduino-библиотек и платформ для Windows. Работает напрямую с GitHub, а не с экосистемой Arduino, которая заблокировала доступ пользователям из России
 
 Скачать свежую версию:
-- [Windows 64 bit](https://github.com/AlexGyver/ArdulibsManager/releases/latest/download/ArdulibsManager-x64.exe)
-- [Windows 32 bit](https://github.com/AlexGyver/ArdulibsManager/releases/latest/download/ArdulibsManager-x86.exe)
+- [Windows 64 bit](https://github.com/AlexGyver/ArduManager/releases/latest/download/ArduManager-x64.exe)
+- [Windows 32 bit](https://github.com/AlexGyver/ArduManager/releases/latest/download/ArduManager-x86.exe)
 
 Возможности:
 - Работа напрямую с GitHub-списком библиотек в обход Arduino
 - Рекурсивная установка зависимостей
 - Сканирование и менеджмент установленных библиотек
 - Проверка обновлений
+- Установка и обновление платформ
 
 ## GitHub token
 Токен необязателен. Он нужен только для повышения лимитов GitHub API. Когда может понадобиться:
@@ -40,4 +41,4 @@
 - Если dependency name сильно отличается от repo name, автоматический поиск зависимости может не сработать
 
 ## Запуск исходника
-Нужен [SDK .NET 8](https://dotnet.microsoft.com/ru-ru/download/dotnet/8.0). Далее запускаем `dotnet restore && dotnet run --project src/ArdulibsManager.App` или `run.bat` из репозитория.
+Нужен [SDK .NET 8](https://dotnet.microsoft.com/ru-ru/download/dotnet/8.0). Далее запускаем `dotnet restore && dotnet run --project src/ArduManager.App` или `run.bat` из репозитория.

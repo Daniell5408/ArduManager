@@ -1,4 +1,4 @@
-name: Build ArdulibsManager Release
+name: Build ArduManager Release
 
 on:
   push:
@@ -38,11 +38,11 @@ jobs:
           dotnet-version: "8.0.x"
 
       - name: Restore
-        run: dotnet restore ./src/ArdulibsManager.App/ArdulibsManager.App.csproj
+        run: dotnet restore ./src/ArduManager.App/ArduManager.App.csproj
 
       - name: Publish ${{ matrix.arch }}
         run: |
-          dotnet publish ./src/ArdulibsManager.App/ArdulibsManager.App.csproj `
+          dotnet publish ./src/ArduManager.App/ArduManager.App.csproj `
             -c Release `
             -r ${{ matrix.rid }} `
             --self-contained true `
@@ -64,10 +64,10 @@ jobs:
 
           Move-Item `
             -Path $exe.FullName `
-            -Destination ./ArdulibsManager-${{ matrix.arch }}.exe `
+            -Destination ./ArduManager-${{ matrix.arch }}.exe `
             -Force
 
       - name: Upload EXE to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ./ArdulibsManager-${{ matrix.arch }}.exe
+          files: ./ArduManager-${{ matrix.arch }}.exe
